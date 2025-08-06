@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Mallorca Airbnb Hotspot Sweeper</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    html, body { height: 100%; margin: 0; padding: 0; box-sizing: border-box; overflow: hidden; }
+    body { font-family: 'Space Grotesk', sans-serif; background: #f8f8f8; color: #111; height: 100vh; display: flex; flex-direction: row; width: 100vw; }
+    #sidebar {
+      width: 320px; min-width: 220px; max-width: 350px;
+      padding: 28px 18px 22px 34px;
+      background: #fff; border-right: 1px solid #eee;
+      box-shadow: 2px 0 8px rgba(0,0,0,0.05);
+      display: flex; flex-direction: column;
+      justify-content: flex-start; align-items: flex-start;
+      height: 100vh; z-index: 2; box-sizing: border-box;
+    }
+    #title { font-size: 1.7rem; font-weight: 700; margin-bottom: 0.7em; letter-spacing: -0.5px; line-height: 1.1; }
+    #desc { font-size: 1.07em; color: #222; margin-bottom: 1.6em; line-height: 1.38; }
+    #reset { margin-top: 1.4em; padding: 0.7em 2.2em; border-radius: 24px; border: none; background: #111; color: #fff; font-weight: bold; font-size: 1.11em; cursor: pointer; transition: background 0.2s;}
+    #reset:hover { background: #444; }
+    #status { margin-top: 1.9em; font-weight: bold; font-size: 1.11em; color: #b80000; min-height: 2.1em; letter-spacing: 0.2px; word-break: break-word; display: block;}
+    #game-container {
+      flex: 1; height: 100vh; display: flex;
+      align-items: center; justify-content: center;
+      background: #fafbfb; overflow: hidden;
+    }
+    #mallorca-grid {
+      display: grid; border-radius: 18px; background: #FAFBFB;
+      box-shadow: 0 2px 20px rgba(80,80,80,0.06);
+      width: 120%; height: 120vh; margin: 15px; padding: 0; overflow: hidden;
+      justify-self: normal; align-self: normal;
+      max-width: 120vw; max-height: 120vh;
+    }
+    .cell { aspect-ratio: 1/1; background: #fff; border-radius: 5px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1.03em; cursor: pointer; user-select: none; transition: background 0.13s, box-shadow 0.13s, border 0.13s; border: 1.2px solid #e6e6e6; min-width: 11px; min-height: 11px; position: relative;}
+    .cell.revealed { background: #f0f0f0; box-shadow: inset 0 1px 4px rgba(30,30,30,0.08); cursor: default; border: 1.2px solid #d4d4d4;}
+    .cell.hotspot {
+      background: #ed6b63 !important;
+      color: #fff !important;
+      font-weight: bold;
+      font-size: 1.23em;
+      box-shadow: 0 0 6px #ed6b637c;
+      border: 2px solid #bb271f;
+    }
+    .cell.lost { background: #fff !important; border: 2.3px solid #222 !important; box-shadow: 0 0 12px #ed6b637c; z-index: 1; animation: lostPulse 0.5s;}
+    @keyframes lostPulse { 0% { box-shadow: 0 0 10px 3px #ed6b63b2; } 100% { box-shadow: 0 0 12px 1px #ed6b637c; } }
+    .cell.flagged { color: #b65700; }
+    .cell.disabled { background: #cce8fa !important; color: #b0b0b0; pointer-events: none; border: 1.1px solid #bbd7ea;}
+    .cell.zero { color: #b6b6b6; }
+    #histopanel {
+      width: 450px; min-width: 230px; max-width: 450px;
+      background: #fff; border-left: 1px solid #eee;
+      box-shadow: -2px 0 8px rgba(0,0,0,0.05);
+      height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: 24px 14px 18px 14px; box-sizing: border-box;
+      z-index: 2;
+    }
+    #histopanel h3 { font-size: 1.19em; font-weight: bold; margin: 0 0 0.5em 0; letter-spacing: 0.01em;}
+    #histopanel canvas { width: 95% !important; max-width: 330px; height: 190px !important; margin: 0 auto; display: block; }
+    @media (max-width: 1350px) { #sidebar { width: 180px; } #histopanel { width: 180px; } }
+    @media (max-width: 1100px) { #sidebar, #histopanel { display: none; } }
+  </style>
+</head>
+<body>
+  <div id="sidebar">
+    <div id="title">Mallorca (busca)minas turísticas</div>
+    <div id="desc">
+    Cada celda representa una zona de la isla de Mallorca. El icono (<span style="color:#ed6b63;">■</span>) señala los puntos calientes, es decir, áreas con <b>más de 15 viviendas vacacionales</b>.<br><br>
+  <i>Haz clic para revelar las zonas seguras. Los números indican cuántas zonas tensionadas hay alrededor.</i>
+  </div>
+    <button id="reset" onclick="window.location.reload()">Empieza de nuevo</button>
+    <span id="status"></span>
+  </div>
+  <div id="game-container">
+    <div id="mallorca-grid"></div>
+  </div>
+  <div id="histopanel">
+    <h3>Distribución de Airbnb por celda</h3>
+    <canvas id="histogram"></canvas>
+    <div style="font-size:0.97em;color:#333;margin-top:0.7em;text-align:center;">Cada barra muestra cuantas celdas contienen este número de Airbnbs.<br>Las 'minas' o zonas tensionadas se muestran como aquellas con <b>más than 15</b>.</div>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    const GEOJSON_PATH = 'MALLORCA_airbnb_grid2.geojson';
+
+    let gridData = [];
+    let nRows, nCols;
+    let mineCount = 0, cellsToReveal = 0, revealedCount = 0;
+    let gameOver = false, win = false;
+    let lastLostCell = null;
+    let histogramChart = null;
+    let allNumPoints = [];
+
+    window.addEventListener('DOMContentLoaded', () => {
+      fetchGeoJSON(GEOJSON_PATH).catch(() => {
+        document.getElementById('status').textContent =
+          "GeoJSON not found. Please make sure MALLORCA_airbnb_grid2.geojson is in the same folder.";
+      });
+    });
+
+    async function fetchGeoJSON(url) {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("GeoJSON not found");
+      const geojson = await res.json();
+      setupGame(geojson);
+    }
+
+    function setupGame(geojson) {
+      document.getElementById('status').textContent = "";
+      lastLostCell = null;
+      let features = geojson.features;
+      let maxRow = -1, maxCol = -1;
+      features.forEach(f => {
+        maxRow = Math.max(maxRow, f.properties.row ?? 0);
+        maxCol = Math.max(maxCol, f.properties.col ?? 0);
+      });
+      nRows = maxRow + 1;
+      nCols = maxCol + 1;
+
+      gridData = Array.from({length: nRows}, (_,r) =>
+        Array.from({length: nCols}, (_,c) => {
+          let props = features.find(f =>
+            (f.properties.row ?? 0) === r &&
+            (f.properties.col ?? 0) === c
+          )?.properties;
+          return (props && props.hasOwnProperty('NUMPOINTS'))
+            ? { ...props, r, c, revealed: false, flagged: false, isMine: false, adj: 0 }
+            : { empty: true, r, c, revealed: true };
+        })
+      );
+      // Assign mines: NUMPOINTS > 15 is a mine
+      mineCount = 0; cellsToReveal = 0;
+      allNumPoints = [];
+      for(let r=0;r<nRows;r++) for(let c=0;c<nCols;c++) {
+        let cell = gridData[r][c];
+        if(cell.empty) continue;
+        let n = +cell['NUMPOINTS'];
+        allNumPoints.push(n);
+        if(n > 15) {
+          cell.isMine = true;
+          mineCount++;
+        }
+        cell.revealed = false;
+        cell.flagged = false;
+        cell.adj = 0;
+        cellsToReveal++;
+      }
+      // Assign adjacent mine counts
+      for(let r=0;r<nRows;r++) for(let c=0;c<nCols;c++) {
+        let cell = gridData[r][c];
+        if(cell.empty || cell.isMine) continue;
+        let adj = 0;
+        for(let dr=-1;dr<=1;dr++) for(let dc=-1;dc<=1;dc++) {
+          if(dr===0 && dc===0) continue;
+          let nr = r+dr, nc = c+dc;
+          if(nr<0||nr>=nRows||nc<0||nc>=nCols) continue;
+          let ncell = gridData[nr][nc];
+          if(ncell && ncell.isMine) adj++;
+        }
+        cell.adj = adj;
+      }
+      revealedCount = 0; win = false; gameOver = false;
+      renderGrid();
+      renderHistogram();
+    }
+
+    function renderGrid() {
+      const grid = document.getElementById('mallorca-grid');
+      grid.innerHTML = '';
+
+      let sidebarWidth = document.getElementById('sidebar').offsetWidth;
+      let rightPanelWidth = document.getElementById('histopanel').offsetWidth;
+      let vw = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0) - sidebarWidth - rightPanelWidth - 8;
+      let vh = Math.max(document.documentElement.clientHeight || 0, window.innerHeight || 0) - 6;
+      let cellSize = Math.floor(Math.min(
+        vw / nCols,
+        vh / nRows,
+        38
+      ));
+      cellSize = Math.max(cellSize, 11);
+
+      grid.style.gridTemplateRows = `repeat(${nRows}, ${cellSize}px)`;
+      grid.style.gridTemplateColumns = `repeat(${nCols}, ${cellSize}px)`;
+
+      for(let r=0;r<nRows;r++) for(let c=0;c<nCols;c++) {
+        const cell = gridData[r][c];
+        const div = document.createElement('div');
+        div.className = 'cell';
+        div.style.width = div.style.height = cellSize + 'px';
+        if(cell.empty) { div.classList.add('disabled'); div.style.pointerEvents='none'; }
+        else {
+          if(cell.revealed && cell.isMine) {
+            div.classList.add('hotspot');
+            if(lastLostCell && lastLostCell[0] === r && lastLostCell[1] === c) {
+              div.classList.add('lost');
+              div.innerHTML = '<span style="font-size:1.25em;">💥</span>';
+            } else {
+              div.innerHTML = '';
+            }
+          }
+          else if(cell.revealed) {
+            div.classList.add('revealed');
+            if(cell.adj > 0) {
+              div.textContent = cell.adj;
+            } else {
+              div.textContent = '';
+              div.classList.add('zero');
+            }
+          }
+          else if(cell.flagged) {
+            div.innerHTML = '<span class="flagged">⚑</span>';
+          } else {
+            div.textContent = '';
+          }
+          div.onclick = e => { if(!gameOver) handleClick(r, c); };
+          div.oncontextmenu = e => { e.preventDefault(); if(!gameOver) handleFlag(r, c); };
+        }
+        grid.appendChild(div);
+      }
+    }
+
+    function handleClick(r, c) {
+      let cell = gridData[r][c];
+      if(cell.revealed || cell.flagged) return;
+      if(cell.isMine) {
+        cell.revealed = true;
+        gameOver = true;
+        lastLostCell = [r, c];
+        revealAll();
+        const numPoints = +cell['NUMPOINTS'] || 0;
+        showStatus(`💥 En esta zona hay <b>${numPoints}</b> Airbnbs!, cuidadoooo!`);
+      } else {
+        revealCell(r, c);
+        if(revealedCount >= cellsToReveal - mineCount) {
+          win = true; gameOver = true;
+          revealAll(true);
+          showStatus("🎉 You revealed all safe areas! Mallorca thanks you.");
+        }
+      }
+      renderGrid();
+    }
+    function revealCell(r, c) {
+      let cell = gridData[r][c];
+      if(cell.revealed || cell.flagged || cell.empty) return;
+      cell.revealed = true;
+      revealedCount++;
+      if(cell.adj === 0) {
+        for(let dr=-1;dr<=1;dr++) for(let dc=-1;dc<=1;dc++) {
+          if(dr===0&&dc===0) continue;
+          let nr=r+dr, nc=c+dc;
+          if(nr<0||nr>=nRows||nc<0||nc>=nCols) continue;
+          revealCell(nr, nc);
+        }
+      }
+    }
+    function handleFlag(r, c) {
+      let cell = gridData[r][c];
+      if(cell.revealed || cell.empty) return;
+      cell.flagged = !cell.flagged;
+      renderGrid();
+    }
+    function revealAll(win=false) {
+      for(let r=0;r<nRows;r++) for(let c=0;c<nCols;c++) {
+        let cell = gridData[r][c];
+        if(cell.empty) continue;
+        cell.revealed = true;
+      }
+      renderGrid();
+    }
+    function showStatus(msg) {
+      document.getElementById('status').innerHTML = msg;
+    }
+
+    // HISTOGRAM
+    function renderHistogram() {
+      if(!window.Chart || !allNumPoints.length) return;
+      let ctx = document.getElementById('histogram').getContext('2d');
+      let values = allNumPoints.slice().sort((a,b) => a-b);
+      let maxVal = Math.max(...values, 22);
+      let bins = [];
+      let labels = [];
+      let upper = Math.max(17, maxVal);
+      for(let i=0;i<=upper;i++) {
+        bins[i]=0; labels[i]=i.toString();
+      }
+      for(let v of values) {
+        let idx = Math.min(Math.round(v), upper);
+        bins[idx]++;
+      }
+      // Optionally group the largest values as "18+" if you want
+      if(upper>17) {
+        labels[17] = '18+';
+        for(let i=18;i<=upper;i++) bins[17]+=bins[i];
+        bins = bins.slice(0,18);
+        labels = labels.slice(0,18);
+      }
+
+      if(histogramChart) { histogramChart.destroy(); }
+      histogramChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Num. of Cells',
+            data: bins,
+            backgroundColor: labels.map((l,i) => (parseInt(l)>15?'#ed6b63':'#eee')),
+            borderColor: '#ccc',
+            borderWidth: 1
+          }]
+        },
+        options: {
+          plugins: {
+            legend: { display: false },
+            tooltip: { enabled: true }
+          },
+          scales: {
+            x: { title: { display: true, text: 'Airbnbs por celda', font:{weight:'bold'} } },
+            y: { title: { display: true, text: 'Cells', font:{weight:'bold'} }, beginAtZero: true, ticks: { precision:0 } }
+          }
+        }
+      });
+    }
+
+    window.addEventListener('resize', () => {
+      if (nRows && nCols) renderGrid();
+      if (histogramChart) histogramChart.resize();
+    });
+  </script>
+</body>
+</html>
