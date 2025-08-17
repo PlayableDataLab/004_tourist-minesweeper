@@ -22,7 +22,7 @@ for feat in features:
     feat['properties']['row'] = y_map[y]
 
 # Save new GeoJSON
-with open("MALLORCA_airbnb_grid2.geojson", "w", encoding="utf-8") as f:
+with open("MALLORCA_airbnb_grid.geojson", "w", encoding="utf-8") as f:
     json.dump(data, f, ensure_ascii=False, indent=2)
 
 print("Done! File saved as MALLORCA_airbnb_grid2.geojson")

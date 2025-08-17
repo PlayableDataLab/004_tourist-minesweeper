@@ -1,332 +1,539 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <title>Mallorca Airbnb Hotspot Sweeper</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&display=swap" rel="stylesheet">
+  <meta charset="UTF-8" />
+  <title>Tourist Minewsweeper</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Fonts: Display for city names + UI font -->
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@400;700&display=swap" rel="stylesheet" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    html, body { height: 100%; margin: 0; padding: 0; box-sizing: border-box; overflow: hidden; }
-    body { font-family: 'Space Grotesk', sans-serif; background: #f8f8f8; color: #111; height: 100vh; display: flex; flex-direction: row; width: 100vw; }
-    #sidebar {
-      width: 320px; min-width: 220px; max-width: 350px;
-      padding: 28px 18px 22px 34px;
-      background: #fff; border-right: 1px solid #eee;
-      box-shadow: 2px 0 8px rgba(0,0,0,0.05);
-      display: flex; flex-direction: column;
-      justify-content: flex-start; align-items: flex-start;
-      height: 100vh; z-index: 2; box-sizing: border-box;
+    :root{
+      --bg:#f7f7f8; --panel:#fff; --ink:#111; --line:#e9e9ea; --hot:#ed6b63;
+      --accent:#ff5a49; --accent2:#ff9a4f;
     }
-    #title { font-size: 1.7rem; font-weight: 700; margin-bottom: 0.7em; letter-spacing: -0.5px; line-height: 1.1; }
-    #desc { font-size: 1.07em; color: #222; margin-bottom: 1.6em; line-height: 1.38; }
-    #reset { margin-top: 1.4em; padding: 0.7em 2.2em; border-radius: 24px; border: none; background: #111; color: #fff; font-weight: bold; font-size: 1.11em; cursor: pointer; transition: background 0.2s;}
-    #reset:hover { background: #444; }
-    #status { margin-top: 1.9em; font-weight: bold; font-size: 1.11em; color: #b80000; min-height: 2.1em; letter-spacing: 0.2px; word-break: break-word; display: block;}
-    #game-container {
-      flex: 1; height: 100vh; display: flex;
-      align-items: center; justify-content: center;
-      background: #fafbfb; overflow: hidden;
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0}
+    body{font-family:'Space Grotesk',sans-serif;color:var(--ink);background:var(--bg);overflow:hidden}
+
+    /* ---------- City select (3 big squares per row + nicer labels) ---------- */
+    #city-select{
+      position:absolute; inset:0; display:grid; grid-template-rows:auto auto 1fr auto;
+      padding:20px 24px; gap:10px;
+      background: radial-gradient(1200px 800px at 10% -10%, #fff, #f2f2f3 55%, #ececee);
+      z-index:50;
     }
-    #mallorca-grid {
-      display: grid; border-radius: 18px; background: #FAFBFB;
-      box-shadow: 0 2px 20px rgba(80,80,80,0.06);
-      width: 120%; height: 120vh; margin: 15px; padding: 0; overflow: hidden;
-      justify-self: normal; align-self: normal;
-      max-width: 120vw; max-height: 120vh;
+    .cs-header{display:flex;align-items:center;gap:10px}
+    .brand-logo{width:28px;height:28px;border-radius:6px;object-fit:cover;box-shadow:0 2px 6px rgba(0,0,0,.15)}
+    .cs-title{font-size:1.05rem;font-weight:800;letter-spacing:.1px}
+    .cs-sub{color:#444;font-size:.92rem}
+
+    .cs-grid{
+      margin:6px auto 0; width:100%; max-width:1400px;
+      display:grid; grid-template-columns:repeat(3, minmax(260px, 1fr)); gap:16px; align-content:start;
     }
-    .cell { aspect-ratio: 1/1; background: #fff; border-radius: 5px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1.03em; cursor: pointer; user-select: none; transition: background 0.13s, box-shadow 0.13s, border 0.13s; border: 1.2px solid #e6e6e6; min-width: 11px; min-height: 11px; position: relative;}
-    .cell.revealed { background: #f0f0f0; box-shadow: inset 0 1px 4px rgba(30,30,30,0.08); cursor: default; border: 1.2px solid #d4d4d4;}
-    .cell.hotspot {
-      background: #ed6b63 !important;
-      color: #fff !important;
-      font-weight: bold;
-      font-size: 1.23em;
-      box-shadow: 0 0 6px #ed6b637c;
-      border: 2px solid #bb271f;
+    @media (max-width:1200px){ .cs-grid{grid-template-columns:repeat(2, minmax(240px, 1fr));} }
+    @media (max-width:720px){ .cs-grid{grid-template-columns:repeat(1, minmax(240px, 1fr));} }
+
+    .city-card{
+      position:relative; aspect-ratio:1/1; border:1px solid var(--line); border-radius:16px; overflow:hidden; cursor:pointer;
+      background:#ddd; box-shadow:0 10px 22px rgba(0,0,0,.06);
+      transition:transform .16s ease, box-shadow .16s ease;
+      isolation:isolate;
     }
-    .cell.lost { background: #fff !important; border: 2.3px solid #222 !important; box-shadow: 0 0 12px #ed6b637c; z-index: 1; animation: lostPulse 0.5s;}
-    @keyframes lostPulse { 0% { box-shadow: 0 0 10px 3px #ed6b63b2; } 100% { box-shadow: 0 0 12px 1px #ed6b637c; } }
-    .cell.flagged { color: #b65700; }
-    .cell.disabled { background: #cce8fa !important; color: #b0b0b0; pointer-events: none; border: 1.1px solid #bbd7ea;}
-    .cell.zero { color: #b6b6b6; }
-    #histopanel {
-      width: 450px; min-width: 230px; max-width: 450px;
-      background: #fff; border-left: 1px solid #eee;
-      box-shadow: -2px 0 8px rgba(0,0,0,0.05);
-      height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: 24px 14px 18px 14px; box-sizing: border-box;
-      z-index: 2;
+    .city-card:hover,.city-card:focus{transform:translateY(-3px); box-shadow:0 16px 34px rgba(0,0,0,.1); outline:none}
+    .city-card .thumb{position:absolute; inset:0; background-size:cover; background-position:center; filter:saturate(1.05) contrast(1.05)}
+    /* soft vignette + top fade so the title always reads */
+    .city-card::after{
+      content:""; position:absolute; inset:0;
+      background:
+        radial-gradient(120% 85% at 50% 80%, rgba(0,0,0,.25), rgba(0,0,0,.15) 45%, transparent 70%),
+        linear-gradient(to bottom, rgba(0,0,0,.55), rgba(0,0,0,.25) 35%, rgba(0,0,0,.10) 55%, transparent 80%);
+      z-index:0;
     }
-    #histopanel h3 { font-size: 1.19em; font-weight: bold; margin: 0 0 0.5em 0; letter-spacing: 0.01em;}
-    #histopanel canvas { width: 95% !important; max-width: 330px; height: 190px !important; margin: 0 auto; display: block; }
-    @media (max-width: 1350px) { #sidebar { width: 180px; } #histopanel { width: 180px; } }
-    @media (max-width: 1100px) { #sidebar, #histopanel { display: none; } }
+
+    /* TITLE ON TOP */
+    .city-card .title-wrap{
+      position:absolute; inset:0; display:grid; grid-template-rows:auto 1fr auto; z-index:1;
+    }
+    .city-card .city-name{
+      margin:10px; text-align:center;
+      font-family:'Bebas Neue', system-ui, sans-serif;
+      font-size: clamp(28px, 6.2vw, 48px);
+      letter-spacing:.5px; line-height:1;
+      color:#fff;
+      text-shadow: 0 2px 0 rgba(0,0,0,.3), 0 8px 18px rgba(0,0,0,.35);
+      transition: color .15s ease, text-shadow .15s ease, transform .15s ease;
+      user-select:none;
+    }
+    .city-card:hover .city-name{
+      color:var(--accent);
+      text-shadow: 0 2px 0 rgba(0,0,0,.15), 0 8px 24px rgba(0,0,0,.25);
+      transform: translateY(-1px);
+    }
+
+    /* meta pill bottom-left */
+    .city-card .label{
+      align-self:end; justify-self:start; margin:12px;
+      background:rgba(255,255,255,.85); color:#222; padding:6px 10px; border-radius:999px;
+      font-size:.82rem; font-weight:700; letter-spacing:.1px; backdrop-filter:saturate(120%) blur(2px);
+    }
+
+    /* Placeholder card */
+    .city-card.placeholder{
+      background: repeating-linear-gradient(135deg,#f8f8f8 0 12px,#f4f4f4 12px 24px);
+      border:2px dashed #cfcfcf; box-shadow:none; cursor:default;
+    }
+    .city-card.placeholder::after{background:none}
+    .city-card.placeholder .ghost{
+      position:absolute; inset:0; display:grid; place-items:center; color:#666;
+      font-weight:700; font-size:1rem; letter-spacing:.2px
+    }
+
+    .cs-footer{display:flex;justify-content:space-between;align-items:center;color:#444;font-size:.85rem;margin-top:2px}
+
+    /* ---------- App layout ---------- */
+    #app{position:absolute;inset:0;display:none}
+    #sidebar{
+      width:310px; min-width:210px; max-width:340px; height:100vh;
+      padding:22px 14px 16px 22px; background:#fff; border-right:1px solid #eee;
+      box-shadow:2px 0 8px rgba(0,0,0,.05); display:flex; flex-direction:column; z-index:2
+    }
+    #title{font-size:1.45rem; font-weight:700; margin-bottom:.6em; letter-spacing:-.2px; line-height:1.1}
+    #desc{font-size:1.0em; color:#222; margin-bottom:1em; line-height:1.38}
+    #controls{display:flex; gap:10px; flex-wrap:wrap}
+    .btn{padding:.55em 1em; border-radius:20px; border:none; cursor:pointer; font-weight:700; font-size:.98em}
+    #reset{background:#111; color:#fff}
+    #reset:hover{background:#444}
+    #backToCities{background:#fff; border:1px solid #ddd; color:#111}
+    #backToCities:hover{border-color:#bbb}
+    #status{margin-top:.85em; font-weight:700; font-size:1.0em; color:#b80000; min-height:1.9em; letter-spacing:.2px; word-break:break-word}
+
+    #game-container{
+      flex:1; height:100vh; display:flex; align-items:center; justify-content:center; background:#fafbfb;
+      padding:10px; overflow:hidden
+    }
+    /* Width/height set from JS -> no bottom gap */
+    #mallorca-grid{
+      display:grid; border-radius:14px; background:#FAFBFB; box-shadow:0 2px 20px rgba(80,80,80,.06); overflow:hidden
+    }
+
+    .cell{
+      aspect-ratio:1/1; background:#fff; border-radius:6px; display:flex; align-items:center; justify-content:center;
+      font-weight:700; font-size:1.03em; cursor:pointer; user-select:none; transition:background .13s,box-shadow .13s,border .13s;
+      border:1.1px solid #e6e6e6; min-width:10px; min-height:10px; position:relative
+    }
+    .cell.revealed{background:#f0f0f0; box-shadow:inset 0 1px 4px rgba(30,30,30,.08); cursor:default; border:1.1px solid #d4d4d4}
+    .cell.hotspot{background:var(--hot)!important; color:#fff!important; font-weight:800; font-size:1.23em; box-shadow:0 0 6px #ed6b637c; border:2px solid #bb271f}
+    .cell.lost{background:#fff!important; border:2.2px solid #222!important; box-shadow:0 0 12px #ed6b637c; z-index:1; animation:lostPulse .5s}
+    @keyframes lostPulse{0%{box-shadow:0 0 10px 3px #ed6b63b2}100%{box-shadow:0 0 12px 1px #ed6b637c}}
+    .cell.flagged{color:#b65700}
+    .cell.disabled{background:#cce8fa!important; color:#b0b0b0; pointer-events:none; border:1px solid #bbd7ea}
+    .cell.zero{color:#b6b6b6}
+
+    #histopanel{
+      width:420px; min-width:220px; max-width:440px; height:100vh;
+      background:#fff; border-left:1px solid #eee; box-shadow:-2px 0 8px rgba(0,0,0,.05);
+      display:flex; flex-direction:column; align-items:center; justify-content:flex-start; padding:18px 12px 14px; z-index:2
+    }
+    #histopanel h3{font-size:1.05em; font-weight:700; margin:0 0 .4em 0}
+    #histopanel canvas{width:95%!important; max-width:320px; height:170px!important; margin:0 auto; display:block}
+
+    /* Loading */
+    #loading{position:absolute; inset:0; display:none; align-items:center; justify-content:center; background:rgba(255,255,255,.75); z-index:60; font-weight:700}
+    .spinner{width:46px; height:46px; border-radius:50%; border:4px solid #ddd; border-top-color:#111; animation:spin .8s linear infinite; margin-right:10px}
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    @media (max-width:1100px){#sidebar,#histopanel{display:none}}
   </style>
 </head>
 <body>
-  <div id="sidebar">
-    <div id="title">Mallorca (busca)minas turísticas</div>
-    <div id="desc">
-    Cada celda representa una zona de la isla de Mallorca. El icono (<span style="color:#ed6b63;">■</span>) señala los puntos calientes, es decir, áreas con <b>más de 15 viviendas vacacionales</b>.<br><br>
-  <i>Haz clic para revelar las zonas seguras. Los números indican cuántas zonas tensionadas hay alrededor.</i>
-  </div>
-    <button id="reset" onclick="window.location.reload()">Empieza de nuevo</button>
-    <span id="status"></span>
-  </div>
-  <div id="game-container">
-    <div id="mallorca-grid"></div>
-  </div>
-  <div id="histopanel">
-    <h3>Distribución de Airbnb por celda</h3>
-    <canvas id="histogram"></canvas>
-    <div style="font-size:0.97em;color:#333;margin-top:0.7em;text-align:center;">Cada barra muestra cuantas celdas contienen este número de Airbnbs.<br>Las 'minas' o zonas tensionadas se muestran como aquellas con <b>más than 15</b>.</div>
-  </div>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script>
-    const GEOJSON_PATH = 'MALLORCA_airbnb_grid2.geojson';
 
+  <!-- ---------- City Select ---------- -->
+  <section id="city-select" aria-label="Selecciona ciudad para jugar">
+    <div class="cs-header">
+      <img class="brand-logo" src="004_feed image-squared.jpg" alt="Tourist Minewsweeper logo" />
+      <div class="cs-title">Tourist Minewsweeper — select a city to play!</div>
+    </div>
+    <div class="cs-sub">Choose a card below.</div>
+
+    <div class="cs-grid" id="cityCards"></div>
+
+    <div class="cs-footer">
+      <div>You can come back here anytime.</div>
+      <div>v1.7 · Prototype</div>
+    </div>
+  </section>
+
+  <!-- ---------- App (game) ---------- -->
+  <section id="app" role="main" aria-live="polite">
+    <div id="sidebar">
+      <div id="title">Hotspot Sweeper</div>
+      <div id="desc"></div>
+      <div id="controls">
+        <button id="reset" class="btn" title="Reiniciar partida">Reiniciar</button>
+        <button id="backToCities" class="btn" title="Volver a elegir ciudad">← Elegir ciudad</button>
+      </div>
+      <span id="status"></span>
+    </div>
+
+    <div id="game-container">
+      <div id="mallorca-grid" aria-label="Tablero del juego"></div>
+    </div>
+
+    <div id="histopanel">
+      <h3>Distribución del valor por celda</h3>
+      <canvas id="histogram"></canvas>
+      <div style="font-size:.9em;color:#333;margin-top:.5em;text-align:center">
+        Las “minas” se determinan por un umbral (fijo por ciudad).
+      </div>
+    </div>
+  </section>
+
+  <!-- Loading overlay -->
+  <div id="loading"><div class="spinner"></div> Cargando datos…</div>
+
+  <script>
+    /* ---------- City registry ---------- */
+    const CITIES = {
+      "Mallorca": {
+        key: "mallorca",
+        image: "Mallorca_card.png",
+        geojson: "MALLORCA_airbnb_grid2.geojson",
+        metricField: "NUMPOINTS",            // metric to evaluate
+        threshold: 15,                       // > 15 Airbnbs
+        unitShort: "Airbnbs",
+        descLong: "viviendas vacacionales",
+        title: "Mallorca (busca)minas turísticas",
+        meta: "Airbnb · 5km grid"
+      },
+      "Barcelona": {
+        key: "barcelona",
+        image: "Barcelona_card.png",
+        geojson: "BCN_grid500_price.geojson",
+        metricField: "price_mean",           // average price per cell
+        threshold: 200,                      // > 200 € is a mine
+        unitShort: "€ (precio medio)",
+        descLong: "precio medio por noche",
+        title: "Barcelona (busca)minas turísticas",
+        meta: "Airbnb · precio medio (500m)"
+      }
+    };
+
+    const MAX_SLOTS = 8; // dotted placeholders up to 8
+
+    /* ---------- UI state ---------- */
+    let SELECTED_CITY = null;
+    let GEOJSON_PATH = null;
+
+    /* ---------- Game state ---------- */
     let gridData = [];
-    let nRows, nCols;
+    let nRows = 0, nCols = 0;
     let mineCount = 0, cellsToReveal = 0, revealedCount = 0;
     let gameOver = false, win = false;
     let lastLostCell = null;
     let histogramChart = null;
-    let allNumPoints = [];
+    let allValues = [];
+    let ACTIVE_THRESHOLD = null;
+    let ACTIVE_FIELD = null;
+    let ACTIVE_UNIT = "";
 
     window.addEventListener('DOMContentLoaded', () => {
-      fetchGeoJSON(GEOJSON_PATH).catch(() => {
-        document.getElementById('status').textContent =
-          "GeoJSON not found. Please make sure MALLORCA_airbnb_grid2.geojson is in the same folder.";
-      });
+      renderCityCards();
+      wireControls();
     });
 
-    async function fetchGeoJSON(url) {
+    function renderCityCards(){
+      const wrap = document.getElementById('cityCards');
+      wrap.innerHTML = '';
+
+      // Real cities
+      Object.entries(CITIES).forEach(([name,cfg])=>{
+        const card = document.createElement('button');
+        card.className='city-card';
+        card.dataset.city=name;
+        card.innerHTML=`
+          <div class="thumb" style="background-image:url('${cfg.image}')"></div>
+          <div class="title-wrap">
+            <div class="city-name" aria-hidden="true">${name}</div>
+            <div></div>
+            <div class="label">${cfg.meta||''}</div>
+          </div>`;
+        card.setAttribute('aria-label', `Jugar en ${name}`);
+        card.onclick=()=>chooseCity(name);
+        card.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();chooseCity(name)}}
+        wrap.appendChild(card);
+      });
+
+      // Dotted placeholders to reach MAX_SLOTS
+      const placeholders = Math.max(0, MAX_SLOTS - Object.keys(CITIES).length);
+      for(let i=0;i<placeholders;i++){
+        const ph = document.createElement('div');
+        ph.className = 'city-card placeholder';
+        ph.innerHTML = `<div class="ghost">Coming soon</div>`;
+        wrap.appendChild(ph);
+      }
+    }
+
+    function wireControls(){
+      document.getElementById('reset').onclick = () => restartCurrentCity();
+      document.getElementById('backToCities').onclick = () => goBackToSelect();
+      window.addEventListener('resize', () => { if(nRows&&nCols) renderGrid(); if(histogramChart) histogramChart.resize(); });
+    }
+
+    function chooseCity(name){
+      const cfg = CITIES[name]; if(!cfg) return;
+      SELECTED_CITY = name; GEOJSON_PATH = cfg.geojson;
+      ACTIVE_FIELD = cfg.metricField; ACTIVE_THRESHOLD = cfg.threshold; ACTIVE_UNIT = cfg.unitShort;
+
+      document.getElementById('title').textContent = cfg.title || name;
+      document.getElementById('desc').innerHTML =
+        `Cada celda representa una zona de <b>${name}</b>. El icono (<span style="color:#ed6b63;">■</span>) marca celdas con `+
+        `<b>${cfg.metricField === 'NUMPOINTS' ? 'más de '+cfg.threshold+' '+cfg.descLong : 'precio medio > '+cfg.threshold+' €'}</b>.<br><br>`+
+        `<i>Haz clic para revelar zonas seguras. Los números indican cuántas “minas” hay alrededor.</i>`;
+
+      document.getElementById('city-select').style.display='none';
+      document.getElementById('app').style.display='flex';
+
+      showLoading(true);
+      fetchGeoJSON(GEOJSON_PATH)
+        .catch(()=>showStatus(`GeoJSON no encontrado. Asegúrate de que <b>${GEOJSON_PATH}</b> está en la misma carpeta.`))
+        .finally(()=>showLoading(false));
+    }
+
+    function restartCurrentCity(){
+      if(!GEOJSON_PATH) return;
+      showLoading(true);
+      fetchGeoJSON(GEOJSON_PATH).finally(()=>showLoading(false));
+    }
+
+    function goBackToSelect(){
+      document.getElementById('mallorca-grid').innerHTML='';
+      document.getElementById('status').textContent='';
+      if(histogramChart){histogramChart.destroy(); histogramChart=null;}
+      gridData=[]; nRows=nCols=mineCount=cellsToReveal=revealedCount=0;
+      gameOver=win=false; lastLostCell=null; allValues=[]; ACTIVE_THRESHOLD=null; ACTIVE_FIELD=null;
+      SELECTED_CITY=null; GEOJSON_PATH=null;
+      document.getElementById('app').style.display='none';
+      document.getElementById('city-select').style.display='grid';
+    }
+
+    function showLoading(show){document.getElementById('loading').style.display = show ? 'flex' : 'none';}
+
+    /* ---------- Data + game setup ---------- */
+    async function fetchGeoJSON(url){
       const res = await fetch(url);
-      if (!res.ok) throw new Error("GeoJSON not found");
+      if(!res.ok) throw new Error('GeoJSON not found');
       const geojson = await res.json();
       setupGame(geojson);
     }
 
-    function setupGame(geojson) {
-      document.getElementById('status').textContent = "";
-      lastLostCell = null;
-      let features = geojson.features;
-      let maxRow = -1, maxCol = -1;
-      features.forEach(f => {
-        maxRow = Math.max(maxRow, f.properties.row ?? 0);
-        maxCol = Math.max(maxCol, f.properties.col ?? 0);
-      });
-      nRows = maxRow + 1;
-      nCols = maxCol + 1;
+    // Build (row,col) even when only left/top exist
+    function indexFeatures(features){
+      const hasRowCol = features.some(f=>('row' in (f.properties||{})) && ('col' in (f.properties||{})));
+      if (hasRowCol) {
+        let maxRow=-1, maxCol=-1;
+        const idx = new Map();
+        for(const f of features){
+          const r = (f.properties.row ?? 0)|0;
+          const c = (f.properties.col ?? 0)|0;
+          idx.set(`${r},${c}`, f.properties);
+          if(r>maxRow) maxRow=r; if(c>maxCol) maxCol=c;
+        }
+        return {index:idx, nRows:maxRow+1, nCols:maxCol+1};
+      } else {
+        // Use left/top (rounded) to reconstruct grid
+        const xs = Array.from(new Set(features.map(f=>Math.round(+((f.properties||{}).left||0))))).sort((a,b)=>a-b);
+        const ys = Array.from(new Set(features.map(f=>Math.round(+((f.properties||{}).top||0))))).sort((a,b)=>b-a);
+        const xI = new Map(xs.map((v,i)=>[v,i]));
+        const yI = new Map(ys.map((v,i)=>[v,i]));
+        const idx = new Map();
+        for(const f of features){
+          const r = yI.get(Math.round(+((f.properties||{}).top||0)));
+          const c = xI.get(Math.round(+((f.properties||{}).left||0)));
+          const props = Object.assign({}, f.properties, {row:r, col:c});
+          idx.set(`${r},${c}`, props);
+        }
+        return {index:idx, nRows:ys.length, nCols:xs.length};
+      }
+    }
 
-      gridData = Array.from({length: nRows}, (_,r) =>
-        Array.from({length: nCols}, (_,c) => {
-          let props = features.find(f =>
-            (f.properties.row ?? 0) === r &&
-            (f.properties.col ?? 0) === c
-          )?.properties;
-          return (props && props.hasOwnProperty('NUMPOINTS'))
-            ? { ...props, r, c, revealed: false, flagged: false, isMine: false, adj: 0 }
-            : { empty: true, r, c, revealed: true };
+    function setupGame(geojson){
+      document.getElementById('status').textContent=""; lastLostCell=null;
+      const features = geojson.features || [];
+
+      // Index and dimensions
+      const {index:idx, nRows:rows, nCols:cols} = indexFeatures(features);
+      nRows = rows; nCols = cols;
+
+      // Build grid
+      gridData = Array.from({length:nRows},(_,r)=>
+        Array.from({length:nCols},(_,c)=>{
+          const props = idx.get(`${r},${c}`);
+          if (props && (ACTIVE_FIELD in props)) {
+            return { ...props, r, c, revealed:false, flagged:false, isMine:false, adj:0 };
+          }
+          return { empty:true, r, c, revealed:true };
         })
       );
-      // Assign mines: NUMPOINTS > 15 is a mine
-      mineCount = 0; cellsToReveal = 0;
-      allNumPoints = [];
-      for(let r=0;r<nRows;r++) for(let c=0;c<nCols;c++) {
-        let cell = gridData[r][c];
+
+      // Collect values & mark mines by ACTIVE_THRESHOLD
+      mineCount = 0; cellsToReveal = 0; allValues = [];
+      for(let r=0;r<nRows;r++) for(let c=0;c<nCols;c++){
+        const cell = gridData[r][c];
         if(cell.empty) continue;
-        let n = +cell['NUMPOINTS'];
-        allNumPoints.push(n);
-        if(n > 15) {
-          cell.isMine = true;
-          mineCount++;
-        }
-        cell.revealed = false;
-        cell.flagged = false;
-        cell.adj = 0;
+        const val = Number(cell[ACTIVE_FIELD]) || 0;
+        allValues.push(val);
+        cell.revealed=false; cell.flagged=false; cell.adj=0; cell.isMine=false;
+        if (val > ACTIVE_THRESHOLD) { cell.isMine = true; mineCount++; }
         cellsToReveal++;
       }
-      // Assign adjacent mine counts
-      for(let r=0;r<nRows;r++) for(let c=0;c<nCols;c++) {
-        let cell = gridData[r][c];
+
+      // Adjacent mine counts
+      for(let r=0;r<nRows;r++) for(let c=0;c<nCols;c++){
+        const cell = gridData[r][c];
         if(cell.empty || cell.isMine) continue;
-        let adj = 0;
-        for(let dr=-1;dr<=1;dr++) for(let dc=-1;dc<=1;dc++) {
-          if(dr===0 && dc===0) continue;
-          let nr = r+dr, nc = c+dc;
+        let adj=0;
+        for(let dr=-1;dr<=1;dr++) for(let dc=-1;dc<=1;dc++){
+          if(!dr&&!dc) continue;
+          const nr=r+dr, nc=c+dc;
           if(nr<0||nr>=nRows||nc<0||nc>=nCols) continue;
-          let ncell = gridData[nr][nc];
-          if(ncell && ncell.isMine) adj++;
+          if(gridData[nr][nc]?.isMine) adj++;
         }
-        cell.adj = adj;
+        cell.adj=adj;
       }
-      revealedCount = 0; win = false; gameOver = false;
+
+      revealedCount=0; win=false; gameOver=false;
       renderGrid();
       renderHistogram();
     }
 
-    function renderGrid() {
+    /* ---------- Rendering (no bottom gap) ---------- */
+    function renderGrid(){
       const grid = document.getElementById('mallorca-grid');
-      grid.innerHTML = '';
+      grid.innerHTML='';
 
-      let sidebarWidth = document.getElementById('sidebar').offsetWidth;
-      let rightPanelWidth = document.getElementById('histopanel').offsetWidth;
-      let vw = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0) - sidebarWidth - rightPanelWidth - 8;
-      let vh = Math.max(document.documentElement.clientHeight || 0, window.innerHeight || 0) - 6;
-      let cellSize = Math.floor(Math.min(
-        vw / nCols,
-        vh / nRows,
-        38
-      ));
-      cellSize = Math.max(cellSize, 11);
+      const container = document.getElementById('game-container');
+      const contW = Math.max(0, container.clientWidth - 2);
+      const contH = Math.max(0, container.clientHeight - 2);
 
-      grid.style.gridTemplateRows = `repeat(${nRows}, ${cellSize}px)`;
+      let cellSize = Math.floor(Math.min(contW / nCols, contH / nRows, 40));
+      cellSize = Math.max(cellSize, 10);
+
       grid.style.gridTemplateColumns = `repeat(${nCols}, ${cellSize}px)`;
+      grid.style.gridTemplateRows = `repeat(${nRows}, ${cellSize}px)`;
+      grid.style.width = (nCols * cellSize) + 'px';
+      grid.style.height = (nRows * cellSize) + 'px';
 
-      for(let r=0;r<nRows;r++) for(let c=0;c<nCols;c++) {
+      for(let r=0;r<nRows;r++) for(let c=0;c<nCols;c++){
         const cell = gridData[r][c];
         const div = document.createElement('div');
-        div.className = 'cell';
+        div.className='cell';
         div.style.width = div.style.height = cellSize + 'px';
-        if(cell.empty) { div.classList.add('disabled'); div.style.pointerEvents='none'; }
-        else {
-          if(cell.revealed && cell.isMine) {
+
+        if(cell.empty){
+          div.classList.add('disabled'); div.style.pointerEvents='none';
+        }else{
+          if(cell.revealed && cell.isMine){
             div.classList.add('hotspot');
-            if(lastLostCell && lastLostCell[0] === r && lastLostCell[1] === c) {
+            if(lastLostCell && lastLostCell[0]===r && lastLostCell[1]===c){
               div.classList.add('lost');
-              div.innerHTML = '<span style="font-size:1.25em;">💥</span>';
-            } else {
-              div.innerHTML = '';
+              div.innerHTML='<span style="font-size:1.15em;">💥</span>';
             }
-          }
-          else if(cell.revealed) {
+          }else if(cell.revealed){
             div.classList.add('revealed');
-            if(cell.adj > 0) {
-              div.textContent = cell.adj;
-            } else {
-              div.textContent = '';
-              div.classList.add('zero');
-            }
+            if(cell.adj>0) div.textContent = cell.adj; else {div.textContent=''; div.classList.add('zero');}
+          }else if(cell.flagged){
+            div.innerHTML='<span class="flagged">⚑</span>';
           }
-          else if(cell.flagged) {
-            div.innerHTML = '<span class="flagged">⚑</span>';
-          } else {
-            div.textContent = '';
-          }
-          div.onclick = e => { if(!gameOver) handleClick(r, c); };
-          div.oncontextmenu = e => { e.preventDefault(); if(!gameOver) handleFlag(r, c); };
+          div.onclick = () => { if(!gameOver) handleClick(r,c); };
+          div.oncontextmenu = e => { e.preventDefault(); if(!gameOver) handleFlag(r,c); };
         }
         grid.appendChild(div);
       }
     }
 
-    function handleClick(r, c) {
-      let cell = gridData[r][c];
-      if(cell.revealed || cell.flagged) return;
-      if(cell.isMine) {
-        cell.revealed = true;
-        gameOver = true;
-        lastLostCell = [r, c];
+    function handleClick(r,c){
+      const cell = gridData[r][c];
+      if(cell.revealed||cell.flagged) return;
+      if(cell.isMine){
+        cell.revealed=true; gameOver=true; lastLostCell=[r,c];
         revealAll();
-        const numPoints = +cell['NUMPOINTS'] || 0;
-        showStatus(`💥 En esta zona hay <b>${numPoints}</b> Airbnbs!, cuidadoooo!`);
-      } else {
-        revealCell(r, c);
-        if(revealedCount >= cellsToReveal - mineCount) {
-          win = true; gameOver = true;
-          revealAll(true);
-          showStatus("🎉 You revealed all safe areas! Mallorca thanks you.");
+        const v = Number(cell[ACTIVE_FIELD]) || 0;
+        const suffix = (ACTIVE_FIELD==='NUMPOINTS') ? ' Airbnbs' : ' € (precio medio)';
+        showStatus(`💥 Celda “mina”: <b>${v}</b>${suffix}.`);
+      }else{
+        revealCell(r,c);
+        if(revealedCount >= cellsToReveal - mineCount){
+          win=true; gameOver=true; revealAll(true);
+          showStatus("🎉 ¡Has revelado todas las zonas seguras!");
         }
       }
       renderGrid();
     }
-    function revealCell(r, c) {
-      let cell = gridData[r][c];
-      if(cell.revealed || cell.flagged || cell.empty) return;
-      cell.revealed = true;
-      revealedCount++;
-      if(cell.adj === 0) {
-        for(let dr=-1;dr<=1;dr++) for(let dc=-1;dc<=1;dc++) {
-          if(dr===0&&dc===0) continue;
-          let nr=r+dr, nc=c+dc;
+
+    function revealCell(r,c){
+      const cell = gridData[r][c];
+      if(cell.revealed||cell.flagged||cell.empty) return;
+      cell.revealed=true; revealedCount++;
+      if(cell.adj===0){
+        for(let dr=-1;dr<=1;dr++) for(let dc=-1;dc<=1;dc++){
+          if(!dr&&!dc) continue;
+          const nr=r+dr, nc=c+dc;
           if(nr<0||nr>=nRows||nc<0||nc>=nCols) continue;
-          revealCell(nr, nc);
+          revealCell(nr,nc);
         }
       }
     }
-    function handleFlag(r, c) {
-      let cell = gridData[r][c];
-      if(cell.revealed || cell.empty) return;
-      cell.flagged = !cell.flagged;
-      renderGrid();
-    }
-    function revealAll(win=false) {
-      for(let r=0;r<nRows;r++) for(let c=0;c<nCols;c++) {
-        let cell = gridData[r][c];
-        if(cell.empty) continue;
-        cell.revealed = true;
-      }
-      renderGrid();
-    }
-    function showStatus(msg) {
-      document.getElementById('status').innerHTML = msg;
+
+    function handleFlag(r,c){
+      const cell = gridData[r][c];
+      if(cell.revealed||cell.empty) return;
+      cell.flagged=!cell.flagged; renderGrid();
     }
 
-    // HISTOGRAM
-    function renderHistogram() {
-      if(!window.Chart || !allNumPoints.length) return;
-      let ctx = document.getElementById('histogram').getContext('2d');
-      let values = allNumPoints.slice().sort((a,b) => a-b);
-      let maxVal = Math.max(...values, 22);
-      let bins = [];
-      let labels = [];
-      let upper = Math.max(17, maxVal);
-      for(let i=0;i<=upper;i++) {
-        bins[i]=0; labels[i]=i.toString();
-      }
-      for(let v of values) {
-        let idx = Math.min(Math.round(v), upper);
-        bins[idx]++;
-      }
-      // Optionally group the largest values as "18+" if you want
-      if(upper>17) {
-        labels[17] = '18+';
-        for(let i=18;i<=upper;i++) bins[17]+=bins[i];
-        bins = bins.slice(0,18);
-        labels = labels.slice(0,18);
-      }
+    function revealAll(){ for(let r=0;r<nRows;r++) for(let c=0;c<nCols;c++){ const cell=gridData[r][c]; if(!cell.empty) cell.revealed=true; } }
 
-      if(histogramChart) { histogramChart.destroy(); }
-      histogramChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-          labels: labels,
-          datasets: [{
-            label: 'Num. of Cells',
-            data: bins,
-            backgroundColor: labels.map((l,i) => (parseInt(l)>15?'#ed6b63':'#eee')),
-            borderColor: '#ccc',
-            borderWidth: 1
-          }]
-        },
-        options: {
-          plugins: {
-            legend: { display: false },
-            tooltip: { enabled: true }
-          },
-          scales: {
-            x: { title: { display: true, text: 'Airbnbs por celda', font:{weight:'bold'} } },
-            y: { title: { display: true, text: 'Cells', font:{weight:'bold'} }, beginAtZero: true, ticks: { precision:0 } }
+    function showStatus(msg){ document.getElementById('status').innerHTML = msg; }
+
+    /* ---------- Histogram ---------- */
+    function renderHistogram(){
+      if(!window.Chart || !allValues.length) return;
+      const ctx = document.getElementById('histogram').getContext('2d');
+
+      const vals = allValues.filter(v => Number.isFinite(v));
+      const min = Math.min(...vals);
+      const max = Math.max(...vals, (ACTIVE_THRESHOLD||0) + 1);
+      const bins = 15;
+      const step = (max - min) / bins || 1;
+
+      const edges = Array.from({length: bins+1}, (_,i)=>min + i*step);
+      const counts = Array(bins).fill(0);
+      for(const v of vals){
+        let idx = Math.floor((v - min) / step);
+        if (idx >= bins) idx = bins-1;
+        if (idx < 0) idx = 0;
+        counts[idx]++;
+      }
+      const labels = counts.map((_,i)=>{
+        const a = edges[i], b = edges[i+1];
+        const fmt = (x)=> (Math.abs(x) >= 100 ? Math.round(x) : Math.round(x*10)/10);
+        return `${fmt(a)}–${fmt(b)}`;
+      });
+
+      if(histogramChart){ histogramChart.destroy(); }
+      histogramChart = new Chart(ctx,{
+        type:'bar',
+        data:{ labels, datasets:[{ label:'Número de celdas', data:counts, backgroundColor:'#eeeeee', borderColor:'#cccccc', borderWidth:1 }]},
+        options:{
+          plugins:{legend:{display:false},tooltip:{enabled:true}},
+          scales:{
+            x:{title:{display:true,text: ACTIVE_FIELD==='NUMPOINTS' ? 'Airbnbs por celda' : 'Precio medio por celda (€)',font:{weight:'bold'}}, ticks:{maxRotation:0,minRotation:0,autoSkip:true,maxTicksLimit:8}},
+            y:{title:{display:true,text:'Celdas',font:{weight:'bold'}},beginAtZero:true,ticks:{precision:0}}
           }
         }
       });
     }
-
-    window.addEventListener('resize', () => {
-      if (nRows && nCols) renderGrid();
-      if (histogramChart) histogramChart.resize();
-    });
   </script>
 </body>
 </html>
